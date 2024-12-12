@@ -110,6 +110,7 @@ public class LearningRecordServiceImpl extends ServiceImpl<LearningRecordMapper,
                 .update();
     }
 
+    // 返回是否是第一次完成。
     private boolean handleVideoRecord(Long userId, LearningRecordFormDTO recordDTO) {
         // 1.查询旧的学习记录
         LearningRecord old = queryOldRecord(recordDTO.getLessonId(), recordDTO.getSectionId());
@@ -129,6 +130,8 @@ public class LearningRecordServiceImpl extends ServiceImpl<LearningRecordMapper,
         }
         // 4.存在，则更新
         // 4.1.判断是否是第一次完成
+            // 旧记录未完成 且 新记录超过一半 => finished = true;
+            // 旧记录已经完成 或者 旧记录未完成 + 新记录也未完成 => finished = false;
         boolean finished = !old.getFinished() && recordDTO.getMoment() * 2 >= recordDTO.getDuration();
         if(!finished){
             LearningRecord record = new LearningRecord();
@@ -137,11 +140,12 @@ public class LearningRecordServiceImpl extends ServiceImpl<LearningRecordMapper,
             record.setMoment(recordDTO.getMoment());
             record.setId(old.getId());
             record.setFinished(old.getFinished());
+            // 未完成，继续更新Redis播放记录
             taskHandler.addLearningRecordTask(record);
             return false;
-            //CompletableFuture
         }
-        // 4.2.更新数据
+        // 第一次完成：↓
+        // 4.2.更新数据：更新学习记录表
         boolean success = lambdaUpdate()
                 .set(LearningRecord::getMoment, recordDTO.getMoment())
                 .set(LearningRecord::getFinished, true)
